@@ -1,0 +1,63 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-matrix:
+    name: Build test matrix
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 2
+
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+
+    steps:
+      - name: Setup asdf
+        uses: asdf-vm/actions/setup@v2
+
+      - name: Get all bash versions to test
+        id: build-matrix
+        run: |
+          export PATH="$HOME/.asdf:$PATH"
+          asdf plugin add bash https://github.com/XaF/asdf-bash.git
+
+          mapfile -t TEST_VERSIONS <<< "$(asdf list-all bash | grep "^[0-9\.]*$" | sort -r -V | awk -F. '!a[$1]++' | sort -V)"
+          LATEST=${TEST_VERSIONS[-1]}
+
+          matrix='[]'
+          for version in "${TEST_VERSIONS[@]}"; do
+            matrix=$(echo "$matrix" | jq '. + [{"os": "ubuntu-latest", "version": "'"${version}"'"}]')
+          done
+          matrix=$(echo "$matrix" | jq '. + [{"os": "macos-latest", "version": "'"${LATEST}"'"}]')
+
+          echo "matrix=$(echo "$matrix" | jq --compact-output)" | tee -a "$GITHUB_OUTPUT"
+
+
+  plugin_test:
+    name: asdf plugin test
+
+    timeout-minutes: 5
+
+    needs:
+      - build-matrix
+
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
+      fail-fast: true
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Run asdf plugin test
+        uses: asdf-vm/actions/plugin-test@v2
+        with:
+          version: ${{ matrix.version }}
+          command: |
+            "$PWD/installs/bash/${{ matrix.version }}/bin/bash" -c "set -u; [[ \$BASH_VERSION =~ \"${{ matrix.version }}\" ]]"
