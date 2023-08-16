@@ -25,8 +25,8 @@ sort_versions() {
 list_all_versions() {
 	local bash_version_archives
 	bash_version_archives=$(
-		curl "${curl_opts[@]}" --list-only 'ftp://ftp.gnu.org/gnu/bash/' |
-			grep '^bash-.*.tar.gz$' |
+		curl "${curl_opts[@]}" 'https://ftp.gnu.org/gnu/bash/' |
+			sed -ne 's/.*>\(bash-[^<]*\.tar\.gz\)<.*/\1/p' |
 			grep -v -- '-doc-'
 	)
 	local version
@@ -50,7 +50,7 @@ download_release() {
 	version="$1"
 	filename="$2"
 
-	url="ftp://ftp.gnu.org/gnu/bash/bash-${version}.tar.gz"
+	url="https://ftp.gnu.org/gnu/bash/bash-${version}.tar.gz"
 
 	echo "* Downloading $TOOL_NAME release $version..."
 	curl "${curl_opts[@]}" -o "$filename" -C - "$url" || fail "Could not download $url"
